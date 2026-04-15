@@ -377,14 +377,12 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
             _mouseDownOnImage = YES;
             self.selection.appending = NO;
         } else if (mouseDownOnSelection &&
-                   (![iTermAdvancedSettingsModel requireCmdForDraggingText] || cmdPressed)) {
-            // not holding down shift key but there is an existing selection.
-            // Possibly a drag coming up (if a cmd-drag follows). When dragging
-            // text requires Cmd and it isn't held, fall through and start a
-            // new selection instead: otherwise a press on the selection is a
-            // dead end (no drag, no new selection), which reads as selection
-            // being frozen, especially on right-to-left lines where a repeat
-            // drag naturally starts on the previous selection.
+                   (![iTermAdvancedSettingsModel dragSelectedText] ||
+                    ![iTermAdvancedSettingsModel requireCmdForDraggingText] || cmdPressed)) {
+            // Delay mutating the selection so a drag can extend it or start drag and drop,
+            // depending on settings, and a plain click can still clear it on mouse-up.
+            // When drag and drop requires Cmd and it is not held, start a new selection
+            // instead of leaving the mouse-down with no available drag action.
             DLog(@"mouse down on selection, returning");
             _mouseDownOnSelection = YES;
             self.selection.appending = NO;
@@ -405,13 +403,8 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
                                               append:(cmdPressed && !altPressed)];
             self.selection.resumable = YES;
         }
-    } else if ([self shouldSelectWordWithClicks:clickCount]) {
-        [self.selection beginSelectionAtAbsCoord:VT100GridAbsCoordMake(x, y + overflow)
-                                            mode:kiTermSelectionModeWord
-                                          resume:YES
-                                          append:self.selection.appending];
-        *sideEffects |= iTermClickSideEffectsModifySelection;
-    } else if (clickCount == 3) {
+    } else if (clickCount == 3 ||
+               (clickCount == 4 && [iTermAdvancedSettingsModel quadrupleClickSelectsLine])) {
         BOOL wholeLines =
         [iTermPreferences boolForKey:kPreferenceKeyTripleClickSelectsFullWrappedLines];
         iTermSelectionMode mode =
@@ -419,6 +412,12 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
 
         [self.selection beginSelectionAtAbsCoord:VT100GridAbsCoordMake(x, y + overflow)
                                             mode:mode
+                                          resume:YES
+                                          append:self.selection.appending];
+        *sideEffects |= iTermClickSideEffectsModifySelection;
+    } else if ([self shouldSelectWordWithClicks:clickCount]) {
+        [self.selection beginSelectionAtAbsCoord:VT100GridAbsCoordMake(x, y + overflow)
+                                            mode:kiTermSelectionModeWord
                                           resume:YES
                                           append:self.selection.appending];
         *sideEffects |= iTermClickSideEffectsModifySelection;
@@ -695,7 +694,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
         !wasSelecting &&
         _lastMouseDownOnSelectedText) {
         // Click on selection. When the mouse-down was on the selection we delay clearing it until
-        // mouse-up so you have the chance to drag it.
+        // mouse-up so dragging can either begin drag and drop or extend the selection.
         [self.selection clearSelection];
         result |= iTermClickSideEffectsModifySelection;
     }
@@ -848,6 +847,23 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
     // It's ok to drag if Cmd is not required to be pressed or Cmd is pressed.
     const BOOL okToDrag = (![iTermAdvancedSettingsModel requireCmdForDraggingText] ||
                            ([event it_modifierFlags] & NSEventModifierFlagCommand));
+    const BOOL dragSelectedText = [iTermAdvancedSettingsModel dragSelectedText];
+    if (_mouseDownOnSelection == YES &&
+        dragThresholdMet &&
+        !dragSelectedText &&
+        !self.selection.live) {
+        DLog(@"begin extending selection after dragging from selected text");
+        const long long overflow = [_mouseDelegate mouseHandlerTotalScrollbackOverflow:self];
+        const VT100GridCoord visualMouseDownCoord =
+            [self.mouseDelegate mouseHandler:self
+                                  clickPoint:_mouseDownEvent
+                               allowOverflow:YES
+                                  firstMouse:_mouseDownWasFirstMouse];
+        const VT100GridCoord mouseDownCoord =
+            [self.mouseDelegate mouseHandler:self logicalCoordForVisualCoord:visualMouseDownCoord];
+        [self.selection beginExtendingSelectionAt:VT100GridAbsCoordMake(mouseDownCoord.x,
+                                                                     mouseDownCoord.y + overflow)];
+    }
     if (okToDrag) {
         if (_mouseDownOnImage && dragThresholdMet) {
             if (wasAlreadyDragging) {
@@ -859,7 +875,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
                                    dragImage:_imageBeingClickedOn
                                     forEvent:event];
             return iTermClickSideEffectsDrag;
-        } else if (_mouseDownOnSelection == YES && dragThresholdMet) {
+        } else if (_mouseDownOnSelection == YES && dragThresholdMet && dragSelectedText) {
             DLog(@"drag and drop a selection");
             // Drag and drop a selection
             NSString *theSelectedText = [self.mouseDelegate mouseHandlerSelectedText:self];
