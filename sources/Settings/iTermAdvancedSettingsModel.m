@@ -344,6 +344,7 @@ DEFINE_BOOL(alwaysAcceptFirstMouse, YES, SECTION_MOUSE @"Always accept first mou
 DEFINE_BOOL(autodetectMouseReportingStuck, YES, SECTION_MOUSE @"Automatically detect when mouse reporting got stuck on?\nThis watches for parts of mouse reporting control sequences being printed to the screen");
 DEFINE_BOOL(reportOnFirstMouse, NO, SECTION_MOUSE @"Send mouse reports when you click in a window that isn't already frontmouse?");
 DEFINE_BOOL(doubleReportScrollWheel, NO, SECTION_MOUSE @"Double-report scroll wheel events to work around tmux scrolling bug.");
+DEFINE_BOOL(dragSelectedText, YES, SECTION_MOUSE @"Dragging selected text starts a drag and drop operation instead of extending the selection.\nDisable this if you prefer dragging from inside a selection to extend it.");
 DEFINE_BOOL(stealKeyFocus, NO, SECTION_MOUSE @"When Focus Follows Mouse is enabled, steal key focus even when inactive.");
 DEFINE_BOOL(aggressiveFocusFollowsMouse, NO, SECTION_MOUSE @"When Focus Follows Mouse is enabled, activate the window under the cursor when iTerm2 becomes active?");
 DEFINE_BOOL(cmdClickWhenInactiveInvokesSemanticHistory, NO, SECTION_MOUSE @"⌘-click in an active pane while iTerm2 isn't the active app invokes Semantic History.\nBy default, iTerm2 respects the OS standard that ⌘-click in an app that doesn't have keyboard focus behaves like a non-⌘ click that does not raise the window.");
@@ -369,6 +370,7 @@ DEFINE_FLOAT(horizontalScrollingSensitivity, 0.1, SECTION_MOUSE @"Sensitivity of
 DEFINE_BOOL(useDoubleClickDelayForCommandSelection, NO, SECTION_MOUSE @"Wait to be sure it's not a double click before selecting a command");
 DEFINE_BOOL(requireOptionToDragSplitPaneTitleBar, NO, SECTION_MOUSE @"Require Option to be pressed to drag a split pane by its title bar?\nThis helps prevent accidental drags.");
 DEFINE_BOOL(threeFingerDragSendsMouseReports, NO, SECTION_MOUSE @"Three-finger drag sends mouse reports when mouse reporting is enabled.\nWhen enabled, three-finger drags will send mouse events to terminal applications like vim, tmux, or zellij instead of performing iTerm2 text selection.");
+DEFINE_BOOL(quadrupleClickSelectsLine, YES, SECTION_MOUSE @"Quadruple-click selects a line using the same mode as triple-click.\nDisable this to keep quadruple-click for word or smart selection.");
 
 #pragma mark Terminal
 
