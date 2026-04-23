@@ -1,4 +1,4 @@
-name: Rebase Selection Advanced Settings And Build Development
+name: Rebase Master And Build Development
 
 on:
   schedule:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rebase-selection-advanced-settings
+  group: rebase-master-build-development
   cancel-in-progress: false
 
 env:
-  TARGET_BRANCH: codex/selection-advanced-settings
+  TARGET_BRANCH: master
 
 jobs:
   sync-and-build:
@@ -54,6 +54,10 @@ jobs:
       - name: Build Development app
         run: |
           set -euo pipefail
+          cleanup() {
+            git restore --source=HEAD --worktree plists/iTerm2.plist
+          }
+          trap cleanup EXIT
           cp plists/dev-iTerm2.plist plists/iTerm2.plist
           mkdir -p "$RUNNER_TEMP/build"
           make Development BUILD_DIR="$RUNNER_TEMP/build" 2>&1 | tee "$RUNNER_TEMP/build_output.txt"
@@ -85,7 +89,7 @@ jobs:
           set -euo pipefail
           if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
             git add -u
-            git commit -m "chore: sync selection-advanced-settings with upstream master"
+            git commit -m "chore: sync master with upstream master"
           fi
 
       - name: Push rebased branch
