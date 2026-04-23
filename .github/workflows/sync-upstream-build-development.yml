@@ -1,0 +1,92 @@
+name: Rebase Selection Advanced Settings And Build Development
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: rebase-selection-advanced-settings
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: codex/selection-advanced-settings
+
+jobs:
+  sync-and-build:
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Rebase target branch onto upstream/master
+        id: rebase
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/gnachman/iTerm2.git
+          git fetch upstream master
+          git fetch origin "${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+          git rebase upstream/master
+          git submodule sync --recursive
+          git submodule update --init --recursive
+          echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Kill orphan Xcode processes
+        run: |
+          killall ibtoold 2>/dev/null || true
+          killall AssetCatalogSimulatorAgent 2>/dev/null || true
+
+      - name: Build Development app
+        run: |
+          set -euo pipefail
+          cp plists/dev-iTerm2.plist plists/iTerm2.plist
+          mkdir -p "$RUNNER_TEMP/build"
+          make Development BUILD_DIR="$RUNNER_TEMP/build" 2>&1 | tee "$RUNNER_TEMP/build_output.txt"
+
+      - name: Package Development app
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent --sequesterRsrc \
+            "$RUNNER_TEMP/build/Development/iTerm2.app" \
+            "$RUNNER_TEMP/iTerm2-Development-${{ steps.rebase.outputs.short_sha }}.zip"
+
+      - name: Upload build log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: development-build-log-${{ github.run_number }}
+          path: ${{ runner.temp }}/build_output.txt
+          retention-days: 7
+
+      - name: Upload Development app
+        uses: actions/upload-artifact@v4
+        with:
+          name: iTerm2-Development-${{ steps.rebase.outputs.short_sha }}
+          path: ${{ runner.temp }}/iTerm2-Development-${{ steps.rebase.outputs.short_sha }}.zip
+          retention-days: 7
+
+      - name: Commit successful sync changes
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            git add -u
+            git commit -m "chore: sync selection-advanced-settings with upstream master"
+          fi
+
+      - name: Push rebased branch
+        run: git push --force-with-lease origin HEAD:"${TARGET_BRANCH}"
