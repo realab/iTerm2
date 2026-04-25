@@ -156,68 +156,36 @@ typedef void (^DeferralBlock)(void);
     return [NSDate dateWithTimeIntervalSince1970:t];
 }
 
-// Walks from newest (fromCommit) to oldest (toCommit). block is called for `fromCommit` but not
-// for `toCommit`.
-- (void)enumerateCommitsFrom:(const git_oid *)fromCommit
-                          to:(const git_oid *)toCommit
-                       block:(void (^)(const git_oid *oid))block {
-    git_revwalk *walker = NULL;
-    const int error = git_revwalk_new(&walker, _repo);
-    if (error) {
-        git_revwalk_free(walker);
-        return;
-    }
-
-    git_revwalk_sorting(walker, GIT_SORT_TOPOLOGICAL);
-    git_revwalk_push(walker, fromCommit);
-    git_oid oid;
-    while (git_revwalk_next(&oid, walker) == 0) {
-        if (0 == git_oid_cmp(&oid, toCommit)) {
-            break;
-        }
-        block(&oid);
-    }
-    git_revwalk_free(walker);
-    walker = NULL;
-}
-
-- (NSInteger)numberOfCommitsFrom:(const git_oid *)fromCommit
-                              to:(const git_oid *)toCommit {
-    __block NSInteger count = 0;
-    [self enumerateCommitsFrom:fromCommit to:toCommit block:^(const git_oid *oid) {
-        count += 1;
-    }];
-    return count;
-}
-
 // git rev-list --left-right --count HEAD...@'{u}'
-// see https://github.com/JuliaLang/julia/blob/345ce78da9aba498e4d7c2dee5f11e6fbf4ddc7c/stdlib/LibGit2/src/LibGit2.jl#L650
+// aheadCount:  commits on HEAD not in upstream (commits you would push).
+// behindCount: commits on upstream not in HEAD (commits you would pull).
 - (BOOL)getCountsFromRef:(git_reference *)ref
-                    pull:(NSInteger *)pullCount
-                    push:(NSInteger *)pushCount {
+                   ahead:(NSInteger *)aheadCount
+                  behind:(NSInteger *)behindCount {
     const git_oid *local_head_oid = [self oidAtRef:ref];
     if (!local_head_oid) {
         return NO;
     }
 
-    git_reference *upstream_ref;
-    int error = git_branch_upstream(&upstream_ref, ref);
-    if (error) {
+    git_reference *upstream_ref = NULL;
+    if (git_branch_upstream(&upstream_ref, ref)) {
         return NO;
     }
+    [_defers addObject:^{ git_reference_free(upstream_ref); }];
 
     const git_oid *remote_oid = git_reference_target(upstream_ref);
-    if (local_head_oid == NULL || remote_oid == NULL) {
-        return NO;
-    }
-    git_oid merge_base = {0};
-    error = git_merge_base(&merge_base, _repo, local_head_oid, remote_oid);
-    if (error) {
+    if (remote_oid == NULL) {
         return NO;
     }
 
-    *pullCount = [self numberOfCommitsFrom:local_head_oid to:&merge_base];
-    *pushCount = [self numberOfCommitsFrom:remote_oid to:&merge_base];
+    size_t ahead = 0;
+    size_t behind = 0;
+    if (git_graph_ahead_behind(&ahead, &behind, _repo, local_head_oid, remote_oid)) {
+        return NO;
+    }
+
+    *aheadCount = (NSInteger)ahead;
+    *behindCount = (NSInteger)behind;
 
     return YES;
 }
@@ -295,17 +263,17 @@ static int GitForEachCallback(git_reference *ref, void *data) {
         return nil;
     }
 
-    // Get pull/push count
-    NSInteger left_count = -1;
-    NSInteger right_count = -1;
+    // Get ahead/behind counts vs upstream
+    NSInteger aheadCount = 0;
+    NSInteger behindCount = 0;
     if ([client getCountsFromRef:headRef
-                            pull:&left_count
-                            push:&right_count]) {
-        state.pushArrow = [@(left_count) stringValue];
-        state.pullArrow = [@(right_count) stringValue];
+                           ahead:&aheadCount
+                          behind:&behindCount]) {
+        state.ahead = [@(aheadCount) stringValue];
+        state.behind = [@(behindCount) stringValue];
     } else {
-        state.pushArrow = @"";
-        state.pullArrow = @"";
+        state.ahead = @"";
+        state.behind = @"";
     }
 
     BOOL dirty = NO;

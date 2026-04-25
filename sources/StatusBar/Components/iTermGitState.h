@@ -31,8 +31,10 @@ typedef NS_ENUM(NSInteger, iTermGitRepoState) {
 @interface iTermGitState : NSObject<NSCopying, NSSecureCoding>
 @property (nonatomic, copy) NSString *directory;
 @property (nonatomic, copy) NSString *xcode;
-@property (nonatomic, copy) NSString *pushArrow;
-@property (nonatomic, copy) NSString *pullArrow;
+// Stringified count of commits ahead of upstream (would be pushed), or "error" on failure.
+@property (nonatomic, copy) NSString *ahead;
+// Stringified count of commits behind upstream (would be pulled), or "error" on failure.
+@property (nonatomic, copy) NSString *behind;
 @property (nonatomic, copy) NSString *branch;
 @property (nonatomic) BOOL dirty;
 @property (nonatomic) NSInteger adds;

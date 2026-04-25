@@ -20,7 +20,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef void (^iTermGitPollWorkerCompletionBlock)(iTermGitState * _Nullable);
+typedef void (^iTermGitPollWorkerCompletionBlock)(iTermGitState * _Nullable, BOOL timedOut);
 
 @implementation iTermGitPollWorker {
     NSMutableDictionary<NSString *, iTermGitState *> *_cache;
@@ -57,14 +57,14 @@ typedef void (^iTermGitPollWorkerCompletionBlock)(iTermGitState * _Nullable);
             @(pending.count)];
 }
 
-- (void)requestPath:(NSString *)path completion:(void (^)(iTermGitState * _Nullable))completion {
+- (void)requestPath:(NSString *)path completion:(void (^)(iTermGitState * _Nullable, BOOL timedOut))completion {
     DLog(@"requestPath:%@", path);
     const NSTimeInterval ttl = 1;
 
     iTermGitState *existing = _cache[path];
     DLog(@"Existing state %@ has age %@", existing, @(existing.age));
     if (existing != nil && existing.age < ttl) {
-        completion(existing);
+        completion(existing, NO);
         return;
     }
 
@@ -78,20 +78,22 @@ typedef void (^iTermGitPollWorkerCompletionBlock)(iTermGitState * _Nullable);
     _pending[path] = [@[ [completion copy] ] mutableCopy];
     DLog(@"Create pending request for %@ with a single waiter", path);
     DLog(@"Send through gateway with the following pending requests:\n%@", _pending);
-    [[iTermSlowOperationGateway sharedInstance] requestGitStateForPath:path completion:^(iTermGitState * _Nullable state) {
-        DLog(@"Got response for %@ with state %@", path, state);
-        [self didFetchState:state path:path];
+    [[iTermSlowOperationGateway sharedInstance] requestGitStateForPath:path completion:^(iTermGitState * _Nullable state, BOOL timedOut) {
+        DLog(@"Got response for %@ with state %@ timedOut=%@", path, state, @(timedOut));
+        [self didFetchState:state timedOut:timedOut path:path];
     }];
 }
 
-- (void)didFetchState:(iTermGitState *)state path:(NSString *)path {
-    DLog(@"Did fetch state %@ for path %@", state, path);
+- (void)didFetchState:(iTermGitState *)state timedOut:(BOOL)timedOut path:(NSString *)path {
+    DLog(@"Did fetch state %@ timedOut=%@ for path %@", state, @(timedOut), path);
     iTermGitState *cached = _cache[path];
     if (cached != nil &&
         !isnan(cached.creationTime) &&  // just paranoia to avoid unbounded recursion
         cached.creationTime > state.creationTime) {
         DLog(@"Cached entry is newer. Recurse.");
-        [self didFetchState:cached path:path];
+        // A stale cached state is preferable to a nil reply, but preserve the timeout signal so
+        // callers can distinguish "we have no info" from "we have stale info because of a timeout".
+        [self didFetchState:cached timedOut:timedOut path:path];
         return;
     }
 
@@ -103,8 +105,8 @@ typedef void (^iTermGitPollWorkerCompletionBlock)(iTermGitState * _Nullable);
     [_pending removeObjectForKey:path];
     DLog(@"Remove all waiters from pending for %@. Pending is now\n%@", path, _pending);
     [blocks enumerateObjectsUsingBlock:^(iTermGitPollWorkerCompletionBlock  _Nonnull block, NSUInteger idx, BOOL * _Nonnull stop) {
-        DLog(@"Invoke completion block for path %@ with state %@", path, state);
-        block(state);
+        DLog(@"Invoke completion block for path %@ with state %@ timedOut=%@", path, state, @(timedOut));
+        block(state, timedOut);
     }];
 }
 

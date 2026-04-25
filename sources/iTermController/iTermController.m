@@ -309,28 +309,6 @@ static iTermController *gSharedInstance;
     }
 }
 
-- (BOOL)terminalIsObscured:(id<iTermWindowController>)terminal {
-    return [self terminalIsObscured:terminal
-                          threshold:[iTermAdvancedSettingsModel notificationOcclusionThreshold]];
-}
-
-- (BOOL)terminalIsObscured:(id<iTermWindowController>)terminal threshold:(double)threshold {
-    BOOL windowIsObscured = NO;
-    NSWindow *window = [terminal window];
-    NSWindowOcclusionState occlusionState = window.occlusionState;
-    // The occlusionState tells if you if you're on another space or another app's window is
-    // occluding yours, but for some reason one terminal window can occlude another without
-    // it noticing, so we compute that ourselves.
-    windowIsObscured = !(occlusionState & NSWindowOcclusionStateVisible);
-    if (!windowIsObscured) {
-        // Try to refine the guess by seeing if another terminal is covering this one.
-        if ([(iTermTerminalWindow *)terminal.window approximateFractionOccluded] > threshold) {
-            windowIsObscured = YES;
-        }
-    }
-    return windowIsObscured;
-}
-
 - (void)newSessionInWindowAtIndex:(id)sender {
     Profile *profile = [[ProfileModel sharedInstance] bookmarkWithGuid:[sender representedObject]];
     if (profile) {

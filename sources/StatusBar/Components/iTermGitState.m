@@ -33,8 +33,8 @@ NSArray<NSString *> *iTermGitStatePaths(void) {
 
 - (void)encodeWithCoder:(NSCoder *)coder {
     [coder encodeObject:self.xcode forKey:@"xcode"];
-    [coder encodeObject:self.pushArrow forKey:@"pushArrow"];
-    [coder encodeObject:self.pullArrow forKey:@"pullArrow"];
+    [coder encodeObject:self.ahead forKey:@"ahead"];
+    [coder encodeObject:self.behind forKey:@"behind"];
     [coder encodeObject:self.branch forKey:@"branch"];
     [coder encodeBool:self.dirty forKey:@"dirty"];
     [coder encodeInteger:self.adds forKey:@"adds"];
@@ -47,8 +47,8 @@ NSArray<NSString *> *iTermGitStatePaths(void) {
     self = [super init];
     if (self) {
         _xcode = [coder decodeObjectOfClass:[NSString class] forKey:@"xcode"];
-        _pushArrow = [coder decodeObjectOfClass:[NSString class] forKey:@"pushArrow"];
-        _pullArrow = [coder decodeObjectOfClass:[NSString class] forKey:@"pullArrow"];
+        _ahead = [coder decodeObjectOfClass:[NSString class] forKey:@"ahead"];
+        _behind = [coder decodeObjectOfClass:[NSString class] forKey:@"behind"];
         _branch = [coder decodeObjectOfClass:[NSString class] forKey:@"branch"];
         _dirty = [coder decodeBoolForKey:@"dirty"];
         _adds = [coder decodeIntegerForKey:@"adds"];
@@ -64,8 +64,8 @@ NSArray<NSString *> *iTermGitStatePaths(void) {
 - (id)copyWithZone:(NSZone *)zone {
     iTermGitState *theCopy = [[iTermGitState alloc] init];
     theCopy.xcode = self.xcode.copy;
-    theCopy.pushArrow = self.pushArrow.copy;
-    theCopy.pullArrow = self.pullArrow.copy;
+    theCopy.ahead = self.ahead.copy;
+    theCopy.behind = self.behind.copy;
     theCopy.branch = self.branch.copy;
     theCopy.dirty = self.dirty;
     theCopy.adds = self.adds;
@@ -76,14 +76,14 @@ NSArray<NSString *> *iTermGitStatePaths(void) {
 #pragma mark NSObject
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<%@: %p dir=%@ xcode=%@ push=%@ pull=%@ branch=%@ dirty=%@ adds=%@ deletes=%@>",
+    return [NSString stringWithFormat:@"<%@: %p dir=%@ xcode=%@ ahead=%@ behind=%@ branch=%@ dirty=%@ adds=%@ deletes=%@>",
             self.class, self,
-            _directory, _xcode, _pushArrow, _pullArrow, _branch, @(_dirty), @(_adds), @(_deletes)];
+            _directory, _xcode, _ahead, _behind, _branch, @(_dirty), @(_adds), @(_deletes)];
 }
 
 - (NSString *)prettyDescription {
-    return [NSString stringWithFormat:@"dir=%@ xcode=%@ push=%@ pull=%@ branch=%@ dirty=%@ adds=%@ deletes=%@",
-            _directory, _xcode, _pushArrow, _pullArrow, _branch, @(_dirty), @(_adds), @(_deletes)];
+    return [NSString stringWithFormat:@"dir=%@ xcode=%@ ahead=%@ behind=%@ branch=%@ dirty=%@ adds=%@ deletes=%@",
+            _directory, _xcode, _ahead, _behind, _branch, @(_dirty), @(_adds), @(_deletes)];
 
 }
 @end

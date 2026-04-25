@@ -13,6 +13,7 @@
 #import "PTYTab.h"
 #import "SessionView.h"
 #import "TmuxController.h"
+#import "iTerm2SharedARC-Swift.h"
 
 NSString *const iTermMovePaneDragType = @"iTermDragPanePBType";
 NSString *const iTermSessionDidChangeTabNotification = @"iTermSessionDidChangeTabNotification";
@@ -106,7 +107,7 @@ NSString *const iTermSessionDidChangeTabNotification = @"iTermSessionDidChangeTa
     if (!term) {
         return;
     }
-    [self moveSession:movingSession toNewTabIn:term atIndex:-1];
+    (void)[self moveSession:movingSession toNewTabIn:term atIndex:-1];
 }
 
 - (void)moveSessionToNewWindow:(PTYSession *)movingSession atPoint:(NSPoint)point {
@@ -129,7 +130,7 @@ NSString *const iTermSessionDidChangeTabNotification = @"iTermSessionDidChangeTa
     if (!newTerm) {
         return;
     }
-    [self moveSession:movingSession toNewTabIn:(PseudoTerminal *)newTerm atIndex:0];
+    (void)[self moveSession:movingSession toNewTabIn:(PseudoTerminal *)newTerm atIndex:0];
 }
 
 + (void)moveTab:(PTYTab *)tab toWindow:(PseudoTerminal *)term atIndex:(NSInteger)index {

@@ -508,6 +508,7 @@ static NSString *const kDynamicToolURL = @"URL";
             y += frame.size.height + [_splitter dividerThickness];
         }
     }
+    [_splitter setNeedsDisplay:YES];
 }
 
 - (void)addTool:(NSView<ToolbeltTool> *)theTool toWrapper:(iTermToolWrapper *)wrapper index:(NSInteger)index {

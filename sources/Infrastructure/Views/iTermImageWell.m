@@ -18,6 +18,7 @@
 
 - (void)awakeFromNib {
     [super awakeFromNib];
+    [self registerForDraggedTypes:[(self.registeredDraggedTypes ?: @[]) arrayByAddingObject:NSPasteboardTypeFileURL]];
     self.wantsLayer = YES;
     self.layer.borderColor = [[NSColor whiteColor] CGColor];
     self.layer.borderWidth = 2.0;
@@ -82,7 +83,29 @@
     [self setNeedsLayout:YES];
 }
 
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    if (_acceptsFolders && [self draggedFolderURL:sender] != nil) {
+        return NSDragOperationCopy;
+    }
+    return [super draggingEntered:sender];
+}
+
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender {
+    if (_acceptsFolders && [self draggedFolderURL:sender] != nil) {
+        return YES;
+    }
+    return [super prepareForDragOperation:sender];
+}
+
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)draggingInfo {
+    if (_acceptsFolders) {
+        NSURL *folderURL = [self draggedFolderURL:draggingInfo];
+        if (folderURL) {
+            [_delegate imageWellDidPerformDropOperation:self filename:folderURL.path];
+            return YES;
+        }
+    }
+
     if (![super performDragOperation:draggingInfo]) {
         return NO;
     }
@@ -104,6 +127,18 @@
     }
 
     return YES;
+}
+
+- (NSURL *)draggedFolderURL:(id<NSDraggingInfo>)draggingInfo {
+    NSArray<NSURL *> *urls = [[draggingInfo draggingPasteboard] readObjectsForClasses:@[[NSURL class]]
+                                                                              options:@{ NSPasteboardURLReadingFileURLsOnlyKey: @YES }];
+    for (NSURL *url in urls) {
+        NSNumber *isDir = nil;
+        if ([url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil] && isDir.boolValue) {
+            return url;
+        }
+    }
+    return nil;
 }
 
 // If we don't override mouseDown: then mouseUp: never gets called.

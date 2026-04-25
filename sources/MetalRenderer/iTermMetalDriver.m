@@ -392,9 +392,9 @@ legacyScrollbarWidth:(unsigned int)legacyScrollbarWidth
         [view setNeedsDisplay:YES];
     }
 
-    iTermPreciseTimerSaveLog([NSString stringWithFormat:@"%@: Dropped frames", _identifier],
-                             [NSString stringWithFormat:@"%0.1f%%\n", 100.0 * ((double)_dropped / (double)MAX(1, _total))]);
     if (_total % 10 == 1) {
+        iTermPreciseTimerSaveLog([NSString stringWithFormat:@"%@: Dropped frames", _identifier],
+                                 [NSString stringWithFormat:@"%0.1f%%\n", 100.0 * ((double)_dropped / (double)MAX(1, _total))]);
         iTermPreciseTimerSaveLog([NSString stringWithFormat:@"%@: Start-to-Start Time (ms)", _identifier],
                                  [_startToStartHistogram stringValue]);
         iTermPreciseTimerSaveLog([NSString stringWithFormat:@"%@: Frames In Flight at Start", _identifier],
@@ -741,67 +741,69 @@ legacyScrollbarWidth:(unsigned int)legacyScrollbarWidth
 
 - (void)addRowDataToFrameData:(iTermMetalFrameData *)frameData {
     for (int y = 0; y < frameData.gridSize.height; y++) {
-        const int columns = frameData.gridSize.width;
-        iTermMetalRowData *rowData = [[iTermMetalRowData alloc] init];
-        [frameData.rows addObject:rowData];
-        rowData.y = y;
-        rowData.absLine = y + frameData.perFrameState.firstVisibleAbsoluteLineNumber;
-        rowData.keysData = [iTermGlyphKeyData dataOfLength:sizeof(iTermMetalGlyphKey) * columns];
-        rowData.attributesData = [iTermAttributesData dataOfLength:sizeof(iTermMetalGlyphAttributes) * columns];
-        rowData.backgroundColorRLEData = [iTermBackgroundColorRLEsData dataOfLength:sizeof(iTermMetalBackgroundColorRLE) * columns];
-        rowData.screenCharArray = [frameData.perFrameState screenCharArrayForRow:y];
-        if (!rowData.screenCharArray) {
-            ITDebugAssert(NO);
-            rowData.screenCharArray = [ScreenCharArray emptyLineOfLength:columns];
+        @autoreleasepool {
+            const int columns = frameData.gridSize.width;
+            iTermMetalRowData *rowData = [[iTermMetalRowData alloc] init];
+            [frameData.rows addObject:rowData];
+            rowData.y = y;
+            rowData.absLine = y + frameData.perFrameState.firstVisibleAbsoluteLineNumber;
+            rowData.keysData = [iTermGlyphKeyData dataOfLength:sizeof(iTermMetalGlyphKey) * columns];
+            rowData.attributesData = [iTermAttributesData dataOfLength:sizeof(iTermMetalGlyphAttributes) * columns];
+            rowData.backgroundColorRLEData = [iTermBackgroundColorRLEsData dataOfLength:sizeof(iTermMetalBackgroundColorRLE) * columns];
+            rowData.screenCharArray = [frameData.perFrameState screenCharArrayForRow:y];
+            if (!rowData.screenCharArray) {
+                ITDebugAssert(NO);
+                rowData.screenCharArray = [ScreenCharArray emptyLineOfLength:columns];
+            }
+            int drawableGlyphs = 0;
+            int rles = 0;
+            iTermMarkStyle markStyle;
+            BOOL hoverState;
+            BOOL lineStyleMark = NO;
+            int lineStyleMarkRightInset = 0;
+            NSDate *date;
+            BOOL belongsToBlock;
+            NSUInteger glyphKeyCount;
+            BOOL hasUnderlineOrStrikethrough;
+            [frameData.perFrameState metalGetGlyphKeysData:rowData.keysData
+                                             glyphKeyCount:&glyphKeyCount
+                                                attributes:rowData.attributesData.mutableBytes
+                                                 imageRuns:rowData.imageRuns
+                                            kittyImageRuns:rowData.kittyImageRuns
+                                                background:rowData.backgroundColorRLEData.mutableBytes
+                                                  rleCount:&rles
+                                                 markStyle:&markStyle
+                                                hoverState:&hoverState
+                                             lineStyleMark:&lineStyleMark
+                                   lineStyleMarkRightInset:&lineStyleMarkRightInset
+                                                       row:y
+                                                     width:columns
+                                                  bidiInfo:rowData.screenCharArray.bidiInfo
+                                            drawableGlyphs:&drawableGlyphs
+                                                      date:&date
+                                            belongsToBlock:&belongsToBlock
+                               hasUnderlineOrStrikethrough:&hasUnderlineOrStrikethrough];
+            rowData.glyphKeyCount = glyphKeyCount;
+            rowData.backgroundColorRLEData.length = rles * sizeof(iTermMetalBackgroundColorRLE);
+            rowData.date = date;
+            rowData.numberOfBackgroundRLEs = rles;
+            rowData.belongsToBlock = belongsToBlock;
+            rowData.hasUnderlineOrStrikethrough = hasUnderlineOrStrikethrough;
+            rowData.numberOfDrawableGlyphs = drawableGlyphs;
+            ITConservativeBetaAssert(drawableGlyphs <= rowData.keysData.length / sizeof(iTermMetalGlyphKey),
+                                     @"Have %@ drawable glyphs with %@ glyph keys",
+                                     @(drawableGlyphs),
+                                     @(rowData.keysData.length / sizeof(iTermMetalGlyphKey)));
+            rowData.lineAttribute = rowData.screenCharArray.metadata.lineAttribute;
+            rowData.markStyle = markStyle;
+            rowData.hoverState = hoverState;
+            rowData.lineStyleMark = lineStyleMark;
+            rowData.lineStyleMarkRightInset = lineStyleMarkRightInset;
+            [rowData.keysData checkForOverrun];
+            [rowData.attributesData checkForOverrun];
+            [rowData.backgroundColorRLEData checkForOverrun];
+            [frameData.debugInfo addRowData:rowData];
         }
-        int drawableGlyphs = 0;
-        int rles = 0;
-        iTermMarkStyle markStyle;
-        BOOL hoverState;
-        BOOL lineStyleMark = NO;
-        int lineStyleMarkRightInset = 0;
-        NSDate *date;
-        BOOL belongsToBlock;
-        NSUInteger glyphKeyCount;
-        BOOL hasUnderlineOrStrikethrough;
-        [frameData.perFrameState metalGetGlyphKeysData:rowData.keysData
-                                         glyphKeyCount:&glyphKeyCount
-                                            attributes:rowData.attributesData.mutableBytes
-                                             imageRuns:rowData.imageRuns
-                                        kittyImageRuns:rowData.kittyImageRuns
-                                            background:rowData.backgroundColorRLEData.mutableBytes
-                                              rleCount:&rles
-                                             markStyle:&markStyle
-                                            hoverState:&hoverState
-                                         lineStyleMark:&lineStyleMark
-                               lineStyleMarkRightInset:&lineStyleMarkRightInset
-                                                   row:y
-                                                 width:columns
-                                              bidiInfo:rowData.screenCharArray.bidiInfo
-                                        drawableGlyphs:&drawableGlyphs
-                                                  date:&date
-                                        belongsToBlock:&belongsToBlock
-                           hasUnderlineOrStrikethrough:&hasUnderlineOrStrikethrough];
-        rowData.glyphKeyCount = glyphKeyCount;
-        rowData.backgroundColorRLEData.length = rles * sizeof(iTermMetalBackgroundColorRLE);
-        rowData.date = date;
-        rowData.numberOfBackgroundRLEs = rles;
-        rowData.belongsToBlock = belongsToBlock;
-        rowData.hasUnderlineOrStrikethrough = hasUnderlineOrStrikethrough;
-        rowData.numberOfDrawableGlyphs = drawableGlyphs;
-        ITConservativeBetaAssert(drawableGlyphs <= rowData.keysData.length / sizeof(iTermMetalGlyphKey),
-                                 @"Have %@ drawable glyphs with %@ glyph keys",
-                                 @(drawableGlyphs),
-                                 @(rowData.keysData.length / sizeof(iTermMetalGlyphKey)));
-        rowData.lineAttribute = rowData.screenCharArray.metadata.lineAttribute;
-        rowData.markStyle = markStyle;
-        rowData.hoverState = hoverState;
-        rowData.lineStyleMark = lineStyleMark;
-        rowData.lineStyleMarkRightInset = lineStyleMarkRightInset;
-        [rowData.keysData checkForOverrun];
-        [rowData.attributesData checkForOverrun];
-        [rowData.backgroundColorRLEData checkForOverrun];
-        [frameData.debugInfo addRowData:rowData];
     }
 }
 

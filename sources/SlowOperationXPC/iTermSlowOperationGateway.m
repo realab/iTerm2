@@ -31,7 +31,7 @@ typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
 @end
 
 @interface iTermGitStateHandlerBox: NSObject
-@property (nonatomic, copy) void (^block)(iTermGitState *);
+@property (nonatomic, copy) void (^block)(iTermGitState *, BOOL);
 @end
 
 @implementation iTermGitStateHandlerBox
@@ -193,7 +193,9 @@ typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
         }
         DLog(@"didInterrupt. Run all %@ handlers", @(handlers.count));
         [handlers enumerateObjectsUsingBlock:^(iTermGitStateHandlerBox  *_Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            obj.block(nil);
+            // Connection drops can mean many things — service crash, OS-initiated termination,
+            // main app shutdown — and we have no way to tell which. Don't claim it was a timeout.
+            obj.block(nil, NO);
         }];
     }
     {
@@ -341,7 +343,7 @@ typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
 }
 
 - (void)requestGitStateForPath:(NSString *)path
-                    completion:(void (^)(iTermGitState * _Nullable))completion {
+                    completion:(void (^)(iTermGitState * _Nullable, BOOL timedOut))completion {
     iTermGitStateHandlerBox *box = [[iTermGitStateHandlerBox alloc] init];
     box.block = completion;
     @synchronized(_gitStateHandlers) {
@@ -349,13 +351,15 @@ typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
     }
     [[_connectionToService remoteObjectProxy] requestGitStateForPath:path
                                                              timeout:[iTermAdvancedSettingsModel gitTimeout]
-                                                          completion:^(iTermGitState * _Nullable state) {
-        [self didGetGitState:state completion:box];
+                                                          completion:^(iTermGitState * _Nullable state, BOOL timedOut) {
+        [self didGetGitState:state timedOut:timedOut completion:box];
     }];
 }
 
 // Runs on some random queue
-- (void)didGetGitState:(iTermGitState *)gitState completion:(iTermGitStateHandlerBox *)completion {
+- (void)didGetGitState:(iTermGitState *)gitState
+              timedOut:(BOOL)timedOut
+            completion:(iTermGitStateHandlerBox *)completion {
     @synchronized (_gitStateHandlers) {
         if (![_gitStateHandlers containsObject:completion]) {
             return;
@@ -363,7 +367,7 @@ typedef void (^iTermRecentBranchFetchCallback)(NSArray<NSString *> *);
         [_gitStateHandlers removeObject:completion];
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        completion.block(gitState);
+        completion.block(gitState, timedOut);
     });
 }
 

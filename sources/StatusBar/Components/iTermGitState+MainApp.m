@@ -42,8 +42,8 @@
         }
         self.directory = [scope valueForVariableName:iTermVariableKeySessionID] ?: @"(null)";
         self.branch = [scope valueForVariableName:iTermGitStateVariableNameGitBranch];
-        self.pushArrow = [scope valueForVariableName:iTermGitStateVariableNameGitPushCount];
-        self.pullArrow = [scope valueForVariableName:iTermGitStateVariableNameGitPullCount];
+        self.ahead = [scope valueForVariableName:iTermGitStateVariableNameGitPushCount];
+        self.behind = [scope valueForVariableName:iTermGitStateVariableNameGitPullCount];
         self.dirty = [[scope valueForVariableName:iTermGitStateVariableNameGitDirty] gitDirtyBoolValue];
         self.adds = [[scope valueForVariableName:iTermGitStateVariableNameGitAdds] integerValue];
         self.deletes = [[scope valueForVariableName:iTermGitStateVariableNameGitDeletes] integerValue];

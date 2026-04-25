@@ -13,6 +13,7 @@
 #import "NSTimer+iTerm.h"
 
 #import <IOKit/ps/IOPowerSources.h>
+#import <stdatomic.h>
 
 NSString *const iTermPowerManagerStateDidChange = @"iTermPowerManagerStateDidChange";
 NSString *const iTermPowerManagerMetalAllowedDidChangeNotification = @"iTermPowerManagerMetalAllowedDidChangeNotification";
@@ -39,6 +40,8 @@ NSString *const iTermPowerManagerMetalAllowedDidChangeNotification = @"iTermPowe
     CFRunLoopRef _runLoop;
     CFRunLoopSourceRef _runLoopSource;
     BOOL _metalAllowed;
+    // NSProcessInfoPowerStateDidChangeNotification is posted on an arbitrary thread; readers can be off-main.
+    atomic_bool _isLowPowerModeEnabled;
     iTermPublisher<iTermPowerState *> *_publisher;
     NSTimer *_timer;
     NSNumber *_hasBatteryNumber;
@@ -78,6 +81,11 @@ static void iTermPowerManagerSourceDidChange(void *context) {
                                                                    name:NSWorkspaceDidWakeNotification
                                                                  object:nil];
 
+        _isLowPowerModeEnabled = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(powerStateDidChange:)
+                                                     name:NSProcessInfoPowerStateDidChangeNotification
+                                                   object:nil];
         _publisher = [[iTermPublisher alloc] initWithCapacity:120];
         _publisher.delegate = self;
         [self metalAllowed];
@@ -102,6 +110,14 @@ static void iTermPowerManagerSourceDidChange(void *context) {
     const BOOL connectionToPowerRequired = [iTermPreferences boolForKey:kPreferenceKeyDisableMetalWhenUnplugged];
     _metalAllowed = (!connectionToPowerRequired || connectedToPower);
     return _metalAllowed;
+}
+
+- (BOOL)isLowPowerModeEnabled {
+    return _isLowPowerModeEnabled;
+}
+
+- (void)powerStateDidChange:(NSNotification *)notification {
+    _isLowPowerModeEnabled = [[NSProcessInfo processInfo] isLowPowerModeEnabled];
 }
 
 #if ENABLE_FAKE_BATTERY

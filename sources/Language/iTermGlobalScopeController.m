@@ -87,10 +87,11 @@ NS_CLASS_AVAILABLE_MAC(10_14)
                                    forVariableNamed:iTermVariableKeyApplicationEffectiveTheme];
         [[iTermVariableScope globalsScope] setValue:[NSHost fullyQualifiedDomainName]
                                    forVariableNamed:iTermVariableKeyApplicationLocalhostName];
-        [NSTimer scheduledTimerWithTimeInterval:60 repeats:YES block:^(NSTimer * _Nonnull timer) {
+        NSTimer *hostnameTimer = [NSTimer scheduledTimerWithTimeInterval:60 repeats:YES block:^(NSTimer * _Nonnull timer) {
             [[iTermVariableScope globalsScope] setValue:[NSHost fullyQualifiedDomainName]
                                        forVariableNamed:iTermVariableKeyApplicationLocalhostName];
         }];
+        hostnameTimer.tolerance = 6;
     }
     return self;
 }

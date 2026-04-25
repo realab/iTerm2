@@ -12,7 +12,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface iTermGitPollWorker : NSObject
 + (instancetype)sharedInstance;
-- (void)requestPath:(NSString *)path completion:(void (^)(iTermGitState * _Nullable))completion;
+- (void)requestPath:(NSString *)path completion:(void (^)(iTermGitState * _Nullable, BOOL timedOut))completion;
 - (void)invalidateCacheForPath:(NSString *)path;
 - (NSString *)cachedBranchForPath:(NSString *)path;
 - (NSString *)debugInfoForDirectory:(NSString *)path;

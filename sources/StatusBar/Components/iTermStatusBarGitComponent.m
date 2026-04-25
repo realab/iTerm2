@@ -179,9 +179,60 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
         return [@(obj1.length) compare:@(obj2.length)];
     }];
     if (result.count == 0) {
+        if ([self shouldShowTimeoutError]) {
+            return @[ [self attributedStringWithString:@"⚠️ timed out"],
+                     [self attributedStringWithString:@"⚠️"] ];
+        }
         return @[ [self attributedStringWithString:@""] ];
     }
     return result;
+}
+
+- (BOOL)shouldShowTimeoutError {
+    if (![self onLocalhost]) {
+        return NO;
+    }
+    if (!_gitPoller.enabled) {
+        return NO;
+    }
+    if (_gitPoller.hasSuccessfullyFetched) {
+        return NO;
+    }
+    return _gitPoller.lastPollTimedOut;
+}
+
+- (void)showTimeoutWarningInWindow:(NSWindow *)window {
+    const double currentTimeout = [iTermAdvancedSettingsModel gitTimeout];
+    const double proposedTimeout = MAX(currentTimeout * 2, currentTimeout + 2);
+    NSString *title = [NSString stringWithFormat:
+                       @"Running git in %@ didn’t finish within %@ seconds, so the status bar "
+                       @"component can’t show the branch. This often happens in very large "
+                       @"repositories or when the working tree is on a slow filesystem.\n\n"
+                       @"Would you like to increase the timeout to %@ seconds?",
+                       _gitPoller.currentDirectory ?: @"the current directory",
+                       [self formatTimeoutSeconds:currentTimeout],
+                       [self formatTimeoutSeconds:proposedTimeout]];
+    NSString *increaseAction = [NSString stringWithFormat:@"Increase to %@s",
+                                [self formatTimeoutSeconds:proposedTimeout]];
+    const iTermWarningSelection selection =
+    [iTermWarning showWarningWithTitle:title
+                               actions:@[ increaseAction, @"Cancel" ]
+                             accessory:nil
+                            identifier:nil
+                           silenceable:kiTermWarningTypePersistent
+                               heading:@"git timed out"
+                                window:window];
+    if (selection == kiTermWarningSelection0) {
+        [iTermAdvancedSettingsModel setGitTimeout:proposedTimeout];
+        [_gitPoller clearTimeoutFlagAndRetry];
+    }
+}
+
+- (NSString *)formatTimeoutSeconds:(double)seconds {
+    if (fabs(seconds - round(seconds)) < 0.01) {
+        return [@((NSInteger)round(seconds)) stringValue];
+    }
+    return [NSString stringWithFormat:@"%.1f", seconds];
 }
 
 - (NSParagraphStyle *)paragraphStyle {
@@ -305,8 +356,8 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
         return nil;
     }
 
-    NSAttributedString *upCount = self.currentState.pushArrow.integerValue > 0 ? [self attributedStringWithString:self.currentState.pushArrow] : nil;
-    NSAttributedString *downCount = self.currentState.pullArrow.integerValue > 0 ? [self attributedStringWithString:self.currentState.pullArrow] : nil;
+    NSAttributedString *upCount = self.currentState.ahead.integerValue > 0 ? [self attributedStringWithString:self.currentState.ahead] : nil;
+    NSAttributedString *downCount = self.currentState.behind.integerValue > 0 ? [self attributedStringWithString:self.currentState.behind] : nil;
 
     NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
     [result appendAttributedString:branch];
@@ -329,13 +380,13 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
         [result appendAttributedString:dirtyImage];
     }
 
-    if (self.currentState.pushArrow.integerValue > 0) {
+    if (self.currentState.ahead.integerValue > 0) {
         [result appendAttributedString:enSpace];
         [result appendAttributedString:upImage];
         [result appendAttributedString:upCount];
     }
 
-    if (self.currentState.pullArrow.integerValue > 0) {
+    if (self.currentState.behind.integerValue > 0) {
         [result appendAttributedString:enSpace];
         [result appendAttributedString:downImage];
         [result appendAttributedString:downCount];
@@ -407,6 +458,9 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
 }
 
 - (BOOL)statusBarComponentIsEmpty {
+    if ([self shouldShowTimeoutError]) {
+        return NO;
+    }
     return (self.currentState.branch.length == 0);
 }
 
@@ -456,6 +510,11 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
         return;
     }
 
+    if ([self shouldShowTimeoutError]) {
+        [self showTimeoutWarningInWindow:containingView.window];
+        return;
+    }
+
     if (self.currentState.branch.length == 0) {
         NSMenu *menu = [[NSMenu alloc] init];
         NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:@"Show Debug Info" action:@selector(debug) keyEquivalent:@""];
@@ -493,7 +552,7 @@ static const NSTimeInterval iTermStatusBarGitComponentDefaultCadence = 2;
         addItem(@"Log", @selector(log:), YES);
         addItem([NSString stringWithFormat:@"Push origin %@", state.branch],
                 @selector(push:),
-                state.pushArrow.intValue > 0 || [state.pushArrow isEqualToString:@"error"]);
+                state.ahead.intValue > 0 || [state.ahead isEqualToString:@"error"]);
         addItem([NSString stringWithFormat:@"Pull origin %@", state.branch],
                 @selector(pull:),
                 !state.dirty);

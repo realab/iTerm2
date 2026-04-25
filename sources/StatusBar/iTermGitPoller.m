@@ -50,7 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
     }
     _enabled = enabled;
     if (!enabled) {
-        DLog(@"%@: Enabled set to true. Calling update.", self);
+        DLog(@"%@: Enabled set to false. Calling update to clear display.", self);
         _update();
     }
 }
@@ -62,6 +62,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                    selector:@selector(poll)
                                                    userInfo:nil
                                                     repeats:YES];
+    _timer.tolerance = _cadence * 0.1;
 }
 
 - (void)bump {
@@ -71,6 +72,15 @@ NS_ASSUME_NONNULL_BEGIN
     if (_timer) {
         [self startTimer];
     }
+}
+
+- (void)clearTimeoutFlagAndRetry {
+    DLog(@"%@: Clearing timeout flag and retrying", self);
+    _lastPollTimedOut = NO;
+    // Refresh the UI so any "timed out" display goes away now, rather than waiting for the
+    // retry to complete.
+    _update();
+    [self bump];
 }
 
 - (NSTimeInterval)timeSinceLastPoll {
@@ -93,16 +103,34 @@ NS_ASSUME_NONNULL_BEGIN
     }
     _lastPollTime = [NSDate date];
     __weak __typeof(self) weakSelf = self;
-    DLog(@"%@: POLL: request path %@", self, self.currentDirectory);
+    NSString *polledPath = self.currentDirectory;
+    DLog(@"%@: POLL: request path %@", self, polledPath);
     iTermGitPollWorker *worker = [iTermGitPollWorker sharedInstance];
     DLog(@"%@: Using worker %@", self, worker);
-    [worker requestPath:self.currentDirectory completion:^(iTermGitState *state) {
-        [weakSelf didPollWithUpdatedState:state];
+    [worker requestPath:polledPath completion:^(iTermGitState *state, BOOL timedOut) {
+        __strong __typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        if (![strongSelf.currentDirectory isEqualToString:polledPath]) {
+            // Directory changed while the poll was in flight; the result is for a stale path
+            // and must not update our per-directory flags or state.
+            DLog(@"%@: Discarding stale poll result for %@ (current is %@)",
+                 strongSelf, polledPath, strongSelf.currentDirectory);
+            return;
+        }
+        [strongSelf didPollWithUpdatedState:state timedOut:timedOut];
     }];
 }
 
-- (void)didPollWithUpdatedState:(iTermGitState *)state {
-    DLog(@"%@ (%@)", state, self.delegate);
+- (void)didPollWithUpdatedState:(iTermGitState *)state timedOut:(BOOL)timedOut {
+    DLog(@"%@ timedOut=%@ (%@)", state, @(timedOut), self.delegate);
+    if (!timedOut) {
+        // A non-timeout reply is "successful" even if state is nil (e.g., the cwd isn't a git repo).
+        // That's a conclusive answer from the service, not a failure to get one.
+        _hasSuccessfullyFetched = YES;
+    }
+    _lastPollTimedOut = timedOut;
     self.state = state;
 }
 
@@ -130,6 +158,10 @@ NS_ASSUME_NONNULL_BEGIN
         }];
     }
     _currentDirectory = [currentDirectory copy];
+    // These flags are per-directory: a fast repo that polls cleanly shouldn't mask a subsequent
+    // slow repo that only times out.
+    _hasSuccessfullyFetched = NO;
+    _lastPollTimedOut = NO;
     DLog(@"%@: Request poll", self);
     [self poll];
 }

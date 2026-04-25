@@ -167,13 +167,6 @@ replaceInitialDirectoryForSessionWithGUID:(NSString *)guid
 - (PseudoTerminal *)terminalWithTab:(PTYTab *)tab;
 - (PseudoTerminal *)terminalWithSession:(PTYSession *)session;
 
-// Indicates a rough guess as to whether a terminal window is substantially visible.
-// Being on another space will count as being obscured.
-// If the window is completely covered by another app's window, it's obscured.
-// If other iTerm windows cover more than ~40% of |terminal| then it's obscured.
-- (BOOL)terminalIsObscured:(id<iTermWindowController>)terminal;
-- (BOOL)terminalIsObscured:(id<iTermWindowController>)terminal threshold:(double)threshold;
-
 // Set Software Update (Sparkle) user defaults keys to reflect settings in
 // iTerm2's user defaults.
 - (void)refreshSoftwareUpdateUserDefaults;

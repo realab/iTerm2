@@ -309,6 +309,11 @@ static BOOL FileIsRegularExecutableFileUsingSearchPathsIfNeeded(NSString *filena
 #else
     const NSTimeInterval timeout = 10;
 #endif
+    [self performRiskyBlockWithTimeout:timeout block:block];
+}
+
+- (void)performRiskyBlockWithTimeout:(NSTimeInterval)timeout
+                               block:(void (^)(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)))block {
     __block _Atomic BOOL done = NO;
     __block _Atomic BOOL wedged = NO;
     _count++;
@@ -596,10 +601,16 @@ static const char *GetPathToSelf(void) {
 
 - (void)requestGitStateForPath:(NSString *)path
                        timeout:(int)timeout
-                    completion:(void (^)(iTermGitState * _Nullable))reply {
-    [self performRiskyBlock:^(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)) {
+                    completion:(void (^)(iTermGitState * _Nullable, BOOL timedOut))reply {
+    // The git subprocess SIGKILLs itself at `timeout` seconds; give the wedge watchdog that long
+    // plus a small grace for fork/XPC overhead so it doesn't fire before the subprocess can
+    // finish. The default performRiskyBlock watchdog (10s release / 30s debug) is sized for
+    // proc_pidinfo calls and would spuriously report "wedged" for any git timeout above those
+    // values.
+    const NSTimeInterval wedgeTimeout = MAX((NSTimeInterval)timeout + 5, 10);
+    [self performRiskyBlockWithTimeout:wedgeTimeout block:^(BOOL shouldPerform, BOOL (^ _Nullable completion)(void)) {
         if (!shouldPerform) {
-            reply(nil);
+            reply(nil, YES);
             syslog(LOG_WARNING, "pidinfo wedged");
             return;
         }
@@ -619,7 +630,7 @@ static const char *GetPathToSelf(void) {
             [task launch];
         } @catch (NSException *exception) {
             syslog(LOG_ERR, "Exception when launch git state fetcher: %s", exception.description.UTF8String);
-            reply(nil);
+            reply(nil, NO);
             completion();
             return;
         }
@@ -635,8 +646,9 @@ static const char *GetPathToSelf(void) {
         [task waitUntilExit];
         [governor decr:token];
         if (task.terminationReason == NSTaskTerminationReasonUncaughtSignal) {
-            // If it timed out don't even try to read because it could be incomplete.
-            reply(nil);
+            // The child was killed by SIGKILL from its own timeout watchdog (see
+            // PIDInfoGitState.m). Don't read output because it may be incomplete.
+            reply(nil, YES);
             completion();
             return;
         }
@@ -645,15 +657,15 @@ static const char *GetPathToSelf(void) {
         NSError *error = nil;
         NSKeyedUnarchiver *decoder = [[NSKeyedUnarchiver alloc] initForReadingFromData:data error:&error];
         if (!decoder) {
-            reply(nil);
+            reply(nil, NO);
             completion();
             return;
         }
-                
+
         iTermGitState *state = [decoder decodeTopLevelObjectOfClass:[iTermGitState class]
                                                              forKey:@"state"
                                                               error:nil];
-        reply(state);
+        reply(state, NO);
         completion();
     }];
 }

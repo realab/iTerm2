@@ -134,6 +134,11 @@ Tabs, Windows, and UI:
   Profiles panel to open the selected profiles as
   splits in a new window instead of the current
   one.
+- Background images can now rotate through a
+  folder of images at a configurable interval.
+  Pick a folder instead of a file in
+  Settings > Profiles > Window > Background.
+
 
 Triggers Improvements:
 - Event-based triggers can fire on events such as
@@ -273,6 +278,12 @@ Settings Improvements:
   Han, Hangul, and Cyrillic.
 
 Bug Fixes:
+- Improved energy efficiency.
+- Fix bell and other user notifications not being
+  posted when iTerm2 is not hidden behind another
+  app. Notifications now post whenever iTerm2 is
+  not the active app or the session’s window is
+  not frontmost.
 - Fix ⌥Y and the Character Viewer inserting
   a backslash instead of ¥ on non-JIS
   keyboards. Restore ⌥+¥ sending ESC+\

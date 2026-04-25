@@ -35,8 +35,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSDate * _Nullable)commiterDateAt:(git_reference *)ref;
 
 - (BOOL)getCountsFromRef:(git_reference *)ref
-                    pull:(NSInteger *)pullCount
-                    push:(NSInteger *)pushCount;
+                   ahead:(NSInteger *)aheadCount
+                  behind:(NSInteger *)behindCount;
 
 - (BOOL)getDirty:(BOOL *)dirtyPtr
        deletions:(NSInteger *)deletionsPtr

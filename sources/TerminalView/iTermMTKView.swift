@@ -16,7 +16,7 @@ public class iTermMTKView: iTermMetalView {
         if iTermAdvancedSettingsModel.hdrCursor() {
             colorPixelFormat = .bgra8Unorm
         }
-        it_schedule()
+        // Timer is scheduled in viewDidMoveToWindow; a detached view shouldn't wake up.
     }
     
     @MainActor required init?(coder: NSCoder) {
@@ -82,6 +82,14 @@ public class iTermMTKView: iTermMetalView {
     override public func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         colorspace = window?.screen?.colorSpace?.cgColorSpace
+        if window != nil {
+            if _timer == nil {
+                it_schedule()
+            }
+        } else {
+            _timer?.invalidate()
+            _timer = nil
+        }
     }
 
     @objc(enclosingWindowDidMoveToScreen:)
