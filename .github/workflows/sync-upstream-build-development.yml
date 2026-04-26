@@ -14,7 +14,7 @@ env:
 
 jobs:
   sync-and-build:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write
 
@@ -24,12 +24,6 @@ jobs:
         with:
           ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
-
-      - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
-
-      - name: Show Xcode version
-        run: xcodebuild -version
 
       - name: Rebase target branch onto upstream/master
         id: rebase
@@ -46,6 +40,21 @@ jobs:
           git submodule update --init --recursive
           echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Select Xcode matching binary dependencies
+        run: |
+          set -euo pipefail
+          xcode_version="$(awk 'NR == 1 { print $2 }' last-xcode-version)"
+          developer_dir="/Applications/Xcode_${xcode_version}.app/Contents/Developer"
+          if [ ! -d "$developer_dir" ]; then
+            echo "::error::Xcode ${xcode_version} not found at ${developer_dir}"
+            find /Applications -maxdepth 1 -name 'Xcode*.app' -print
+            exit 1
+          fi
+          sudo xcode-select -s "$developer_dir"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
       - name: Kill orphan Xcode processes
         run: |
           killall ibtoold 2>/dev/null || true
@@ -55,7 +64,11 @@ jobs:
         run: |
           set -euo pipefail
           cleanup() {
-            git restore --source=HEAD --worktree plists/iTerm2.plist
+            if git ls-files --error-unmatch plists/iTerm2.plist >/dev/null 2>&1; then
+              git restore --source=HEAD --worktree plists/iTerm2.plist
+            else
+              rm -f plists/iTerm2.plist
+            fi
           }
           trap cleanup EXIT
           cp plists/dev-iTerm2.plist plists/iTerm2.plist
