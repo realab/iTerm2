@@ -88,6 +88,7 @@ help:
 	@echo "  make cleandeps    Clean submodule build directories"
 	@echo ""
 	@echo "Release:"
+	@echo "  make notarized-release  Build, sign, notarize, and zip this fork"
 	@echo "  make Beta         Build Beta configuration"
 	@echo "  make Nightly      Build Nightly configuration"
 	@echo "  make Deployment   Build Deployment configuration"
@@ -445,6 +446,11 @@ restart:
 release:
 	cp plists/release-iTerm2.plist plists/iTerm2.plist
 	make Deployment
+
+# Resume or customize with NOTARIZE_ARGS='--action export --archive-path /path'.
+.PHONY: notarized-release
+notarized-release:
+	python3 tools/build_notarized_release.py $(NOTARIZE_ARGS)
 
 preview:
 	cp plists/preview-iTerm2.plist plists/iTerm2.plist

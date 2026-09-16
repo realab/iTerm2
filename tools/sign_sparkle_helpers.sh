@@ -61,4 +61,4 @@ if [ -n "$BAD" ]; then
   exit 1
 fi
 
-echo "OK: all nested Mach-O in $FRAMEWORK are Developer ID signed."
+echo "OK: all nested Mach-O in $FRAMEWORK are signed with $IDENTITY."
